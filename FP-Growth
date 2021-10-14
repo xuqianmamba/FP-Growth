@@ -1,0 +1,219 @@
+#include <bits/stdc++.h>
+#include <fstream>
+#include <map>
+using namespace std;
+
+//用veator来存储一个int，string的PAIR，PAIR表示每个项目出现的次数
+//vector外面再套一个vector，里面的vector表示一行，外面则是整个数据集
+
+struct TreeNode{//树中的节点
+    int times;//出现次数
+    string Id;
+    TreeNode *Parent;//该节点的父亲节点
+    TreeNode *next;//该节点下一次出现的位置
+    vector<TreeNode*> Children;
+};
+
+int row;//标记行数
+int Min_support,i,j=0,k;
+const int SIZE = 1000;//默认每行的输入不会超过1000个字符
+map<string,int>::iterator iter;
+typedef pair<int,string> PAIR;
+vector <PAIR> line_vec;
+vector <vector<PAIR>> items_vec; 
+map <string,int> items;//用来存放项目的名称以及出现的次数
+map <string,TreeNode> heads;//存放当前编号的节点的头部
+vector <string> reversed_sort;
+string str;
+TreeNode root;
+
+int InitTree(TreeNode &T)//树的初始化
+{
+    TreeNode temp;
+    temp.Id="";
+    temp.times=0;
+    temp.next=NULL;
+    temp.Parent=NULL;
+    temp.Children.clear();
+    T=temp;
+    return 0;
+}
+
+void data_in(int j){
+    string temp;//存储临时的字符串
+    int l;
+    l=strlen(str.c_str());
+    //cout<<l<<endl;
+    k=0;
+    for(i=0;i<l;i++){//逐个字符处理
+        //cout<<str[i]<<endl;
+        if(str[i]==' '||i==l-1){//当读取到空格或者已经是最后一个字符
+            if(i==l-1)
+                temp+=str[i];
+            pair<int,string> p;
+            p=make_pair(1,temp);
+            line_vec.push_back(p);
+            iter = items.find(line_vec[k].second);//在map里面寻找这个字符串
+            if(iter != items.end()){//直接找到了
+                iter->second++;
+            }
+            else{//没找到的话，新建一个项目，将次数置1
+                items.insert(pair<string,int>(line_vec[k].second,1));
+            }
+            k++;
+            temp="";//将临时变量赋值为空，进行下一次
+            continue;
+        }
+        else
+            temp+=str[i];//当前字符串+1
+    }
+    items_vec.push_back(line_vec);//将本行的读入放入二维数组
+    line_vec.clear();//清空临时储存行
+    return;
+}
+
+bool cmp1(pair<int,string>a,pair<int,string>b){
+    if(a.first==b.first) return a.second<b.second;//出现次数相同，根据字典序排序
+    else return a.first > b.first;//出现次数不同，按照出现次序降序排序
+}
+
+void sort_item(){//对数据集中的每一行数据根据出现次数降序排序
+    for(i=0;i<items_vec.size();i++){
+        for(j=0;j<items_vec[i].size();j++)//将每个pair类型变成该元素在项目集中总共的出现次数和名称
+            items_vec[i][j]=make_pair(items[items_vec[i][j].second],items_vec[i][j].second);
+        sort(items_vec[i].begin(),items_vec[i].end(),cmp1);
+        /*for(j=0;j<items_vec[i].size();j++)
+            cout<<items_vec[i][j].second<<" ";*/
+    }
+    return;
+}
+
+void find_frequent_item(){//寻找大小为1的频繁项集进行数据初筛
+    ifstream in("data.txt");
+    if(in.is_open()){
+    while(getline(in,str)){
+            //cout<<row<<endl;//输出行号，debug用的
+            data_in(row);//逐行读取数据
+            row++;
+        }
+        sort_item();//对数据进行排序       
+    }
+    else
+        cout<<"Error in input data!";
+    return;
+}
+
+/*目标：完成树的构建
+1.遍历每一行，每一行开始从根节点遍历，然后遍历当前节点的所有子节点
+2.对于每个项目，开一个哈希表，string<Node*>类型，存放没一个节点的head*/
+void add_line(int k){//在这个函数 里面不能用i
+    int number,searched;
+    TreeNode *temp_node=&root;
+    for(j=0;j<items_vec[k].size();j++){
+        searched=0;
+        if(items_vec[k][j].first<Min_support)//如果这一行的某个数开始已经没有大于最小支持度的数了直接返回
+            return;
+        for(number=0;number<temp_node->Children.size();number++){
+            if(items_vec[k][j].second==temp_node->Children[number]->Id){//如果当前这一行排序后的数组的ID和当前树中节点的某个子节点的ID相等
+                //cout<<endl<<"1111111111111111111111111111"<<endl;
+                temp_node=temp_node->Children[number];//直接把当前的树中节点设为这个节点
+                temp_node->times++;//出现次数加一
+                searched++;//标记已经搜索到了
+                break;
+            }
+        }
+        if(!searched){//如果没有找到
+            //cout<<endl<<"222222222222222222222222222"<<endl;
+            TreeNode *new_child=new TreeNode();//创建一个新节点，对其赋值
+            InitTree(*new_child);//初始化
+            new_child->Id=items_vec[k][j].second;//修改ID
+            new_child->times++;//出现次数设为1
+            new_child->Parent=temp_node;//父节点设为temp_node
+
+            if(heads.find(items_vec[k][j].second)==heads.end()){//并且如果这个字母没有出现过
+                reversed_sort.push_back(items_vec[k][j].second);//将遍历顺序列表增加该元素
+                heads[items_vec[k][j].second]=*new_child;//将这个字母的第一次出现标记为这个
+            }
+            else{//如果之前出现过
+                new_child->next=&heads[items_vec[k][j].second];//将新节点的next指向之前的head
+            }
+            temp_node->Children.push_back(new_child);//new_child将作为temp_node的子节点增加进去
+            //cout<<endl<<temp_node->Id<<"  "<<temp_node->Children.size()<<endl;
+            temp_node=new_child;//此后，new_child将作为temp_node参与计算
+        }
+    }
+    return;
+}
+
+void make_tree(){//建树
+    InitTree(root);
+    for(i=0;i<row;i++){
+        add_line(i);
+    }
+    return;
+}
+
+bool cmp2(string a,string b){//根据出现次序从小到大排序
+    return items[a]<items[b];
+}
+
+void switch_sort(){//需要逆序输出
+    sort(reversed_sort.begin(),reversed_sort.end(),cmp2);
+}
+
+void frequent_i(TreeNode node_i){//以节点node_i为基准向上搜索
+    int times=0;
+    TreeNode *temp_node;
+    string out_string="[";
+    temp_node=&node_i;
+    if((node_i.times<Min_support)||(node_i.Parent==&root)){//该次出现次数小于最小支持度，或者该次直接为根节点的子节点
+        if(node_i.next==NULL) return;//遍历结束，返回
+        else frequent_i(*node_i.next);
+    }
+    else{
+        for(;;){
+            out_string+=temp_node->Id;//逐个输出
+            if(!times){
+                times++;
+                out_string+=",";
+                temp_node=temp_node->Parent;
+                continue;
+            }
+            cout<<out_string<<"]  ";
+            out_string+=",";
+            if((temp_node->Parent)==(&root)) break;//当父节点为根节点，退出循环
+            temp_node=temp_node->Parent;
+        }
+        if(node_i.next==NULL) return;
+        else frequent_i(*node_i.next);
+    }
+}
+
+void show_sequent(){//输出频繁项集
+    switch_sort();
+    int v_size=reversed_sort.size();
+    for(int x=0;x<v_size;x++){//终于，输出频繁项目集
+        //cout<<"All frequent item sets that contain"<<reversed_sort[x]<<"are:"<<endl;
+        cout<<"["<<reversed_sort[x]<<"]  ";
+        frequent_i(heads[reversed_sort[x]]);
+        cout<<endl;
+    }
+}
+
+int main(){
+    cout<<"Please input minimum support:"<<endl;
+    cin>>Min_support;
+    find_frequent_item();
+    make_tree();
+    cout<<endl<<"The number of occurrences for all items is"<<endl;
+    iter = items.begin();
+    while(iter != items.end()) {
+        cout << iter->first << " : " << iter->second << endl;
+        iter++;
+    }
+    cout<<endl<<"All frequent item sets are"<<endl;
+    //cout<<endl<<endl<<"capacity of root is   "<<root.Children.size();
+    //cout<<endl<<root.Children[0]->times<<root.Children[0]->Id;
+    show_sequent();
+    return 0;
+}
